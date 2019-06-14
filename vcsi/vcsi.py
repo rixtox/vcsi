@@ -408,11 +408,12 @@ class MediaCapture(object):
     """
 
     def __init__(self, path, accurate=False, skip_delay_seconds=DEFAULT_ACCURATE_DELAY_SECONDS,
-                 frame_type=DEFAULT_FRAME_TYPE):
+                 frame_type=DEFAULT_FRAME_TYPE, video_filter=None):
         self.path = path
         self.accurate = accurate
         self.skip_delay_seconds = skip_delay_seconds
         self.frame_type = frame_type
+        self.video_filter = video_filter
 
     def make_capture(self, time, width, height, out_path="out.png"):
         """Capture a frame at given time with given width and height using ffmpeg
@@ -427,18 +428,24 @@ class MediaCapture(object):
             "-s", "%sx%s" % (width, height),
         ]
 
+        video_filter = None
+
         if self.frame_type is not None:
-            select_args = [
-                "-vf", "select='eq(frame_type\\," + self.frame_type + ")'"
-            ]
+            video_filter = "select='eq(frame_type\\," + self.frame_type + ")'"
 
         if self.frame_type == "key":
-            select_args = [
-                "-vf", "select=key"
-            ]
+            video_filter = "select=key"
 
-        if self.frame_type is not None:
-            ffmpeg_command += select_args
+        if self.video_filter is not None:
+            if video_filter is None:
+                video_filter = self.video_filter
+            else:
+                video_filter = video_filter + "," + self.video_filter
+
+        if video_filter is not None:
+            ffmpeg_command += [
+                "-vf", video_filter
+            ]
 
         ffmpeg_command += [
             "-y",
@@ -458,8 +465,10 @@ class MediaCapture(object):
                     "-s", "%sx%s" % (width, height),
                 ]
 
-                if self.frame_type is not None:
-                    ffmpeg_command += select_args
+                if video_filter is not None:
+                    ffmpeg_command += [
+                        "-vf", video_filter
+                    ]
 
                 ffmpeg_command += [
                     "-y",
@@ -476,8 +485,10 @@ class MediaCapture(object):
                     "-s", "%sx%s" % (width, height),
                 ]
 
-                if self.frame_type is not None:
-                    ffmpeg_command += select_args
+                if video_filter is not None:
+                    ffmpeg_command += [
+                        "-vf", video_filter
+                    ]
 
                 ffmpeg_command += [
                     "-y",
@@ -1484,6 +1495,12 @@ def main():
         default="{TIME}",
         dest="timestamp_format"
     )
+    parser.add_argument(
+        "--video-filter",
+        help="Create the filtergraph specified by filtergraph and use it to filter the stream.",
+        default=None,
+        dest="video_filter"
+    )
 
     args = parser.parse_args()
 
@@ -1571,7 +1588,8 @@ def process_file(path, args):
         path,
         accurate=args.is_accurate,
         skip_delay_seconds=args.accurate_delay_seconds,
-        frame_type=args.frame_type
+        frame_type=args.frame_type,
+        video_filter=args.video_filter
     )
 
     # metadata margins
