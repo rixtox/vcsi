@@ -210,6 +210,11 @@ class MediaInfo(object):
         if self.display_height == 0:
             self.display_height = self.sample_height
 
+    def duration_to_sec(self, duration):
+        d, f = duration.split('.')
+        h, m, s = d.split(':')
+        return int(h) * 3600 + int(m) * 60 + int(s) + float('0.{}'.format(f))
+
     def compute_format(self):
         """Compute duration, size and retrieve filename
         """
@@ -218,11 +223,21 @@ class MediaInfo(object):
         try:
             # try getting video stream duration first
             self.duration_seconds = float(self.video_stream["duration"])
+            print("using video stream duration")
         except (KeyError, AttributeError):
-            # otherwise fallback to format duration
-            self.duration_seconds = float(format_dict["duration"])
+            try:
+                self.duration_seconds = self.duration_to_sec(self.video_stream["tags"]["DURATION-eng"])
+                print("using video stream duration tag")
+            except (KeyError, AttributeError):
+                # otherwise fallback to format duration
+                print("no video stram duration")
+                print(self.video_stream)
+                print("using container duration")
+                self.duration_seconds = float(format_dict["duration"])
 
+        print("duration = {}".format(self.duration_seconds))
         self.duration = MediaInfo.pretty_duration(self.duration_seconds)
+        print("formatted duration = {}".format(self.duration))
 
         self.filename = os.path.basename(format_dict["filename"])
 
