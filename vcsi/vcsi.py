@@ -32,6 +32,7 @@ import numpy
 from jinja2 import Template
 import texttable
 import parsedatetime
+from bs4 import BeautifulSoup
 
 here = os.path.abspath(os.path.dirname(__file__))
 
@@ -138,6 +139,17 @@ class MediaInfo(object):
             error = "Could not find 'ffprobe' executable. Please make sure ffmpeg/ffprobe is installed and is in your PATH."
             error_exit(error)
 
+        mediainfo_command = [
+            'mediainfo', '--Output=XML', path
+        ]
+
+        try:
+            output = subprocess.check_output(mediainfo_command)
+            self.mediainfo_soup = BeautifulSoup(output.decode("utf-8"), 'xml')
+        except FileNotFoundError:
+            error = "Could not find 'ffprobe' executable. Please make sure ffmpeg/ffprobe is installed and is in your PATH."
+            error_exit(error)
+
     def human_readable_size(self, num, suffix='B'):
         """Converts a number of bytes to a human readable format
         """
@@ -157,6 +169,15 @@ class MediaInfo(object):
                     break
             except:
                 pass
+
+        for track in self.mediainfo_soup.find_all('track'):
+            try:
+                if track['type'] == 'Video':
+                    self.video_info = track
+                    break
+            except:
+                pass
+
 
     def find_audio_stream(self):
         """Find the first stream which is an audio stream
@@ -221,19 +242,24 @@ class MediaInfo(object):
         format_dict = self.ffprobe_dict["format"]
 
         try:
-            # try getting video stream duration first
-            self.duration_seconds = float(self.video_stream["duration"])
-            print("using video stream duration")
-        except (KeyError, AttributeError):
+            duration_node = self.video_info.find('Duration')
+            if duration_node is not None:
+                self.duration_seconds = float(duration_node.text)
+        except:
             try:
-                self.duration_seconds = self.duration_to_sec(self.video_stream["tags"]["DURATION-eng"])
-                print("using video stream duration tag")
+                # try getting video stream duration first
+                self.duration_seconds = float(self.video_stream["duration"])
+                print("using video stream duration")
             except (KeyError, AttributeError):
-                # otherwise fallback to format duration
-                print("no video stram duration")
-                print(self.video_stream)
-                print("using container duration")
-                self.duration_seconds = float(format_dict["duration"])
+                try:
+                    self.duration_seconds = self.duration_to_sec(self.video_stream["tags"]["DURATION-eng"])
+                    print("using video stream duration tag")
+                except (KeyError, AttributeError):
+                    # otherwise fallback to format duration
+                    print("no video stram duration")
+                    print(self.video_stream)
+                    print("using container duration")
+                    self.duration_seconds = float(format_dict["duration"])
 
         print("duration = {}".format(self.duration_seconds))
         self.duration = MediaInfo.pretty_duration(self.duration_seconds)
